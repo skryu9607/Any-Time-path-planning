@@ -1,4 +1,5 @@
-from tkinter import W
+from tkinter import W, Grid
+from turtle import Turtle
 import pygame
 import math
 from queue import PriorityQueue
@@ -71,8 +72,20 @@ class Node:
     def draw(self,win):
         pygame.draw.rect(win,self.color,(self.x,self.y,self.width,self.width))
     
-    def update_neighbors(self,grid):
-        pass
+    def update_neighbors(self,grid): # We can check up,down,left,right neighbors
+        self.neighbors = []
+        if self.row < self.total_rows - 1 and not grid[self.row+1][self.col].is_barrier(): # DOWN
+            self.neighbors.append(grid[self.row+1][self.col])
+
+        if self.row > 0 and not grid[self.row-1][self.col].is_barrier(): # UP
+            self.neighbors.append(grid[self.row-1][self.col])
+
+        if self.col > 0 and not grid[self.row][self.col-1].is_barrier(): # LEFT
+            self.neighbors.append(grid[self.row][self.col-1])
+
+        if self.col < self.total_rows - 1 and not grid[self.row][self.col+1].is_barrier(): # RIGHT
+            self.neighbors.append(grid[self.row][self.col+1])    
+
     def __lt__(self,other):
         return False
 # I'm going to define heuristic function
@@ -84,3 +97,139 @@ def h(p1,p2):
     return abs(x1 - x2) + abs(y1 - y2)
 # So I need some data structure that can hold all of these
 # spots
+def make_grid(rows,width):
+    grid = []
+    gap = width //rows
+    for i in range(rows):
+        grid.append([])
+        for j in range(rows):
+            node = Node(i,j,gap,rows)
+            grid[i].append(node)
+    return grid
+def draw_grid(win,rows,width):
+    gap = width // rows
+    for i in range(rows):
+        pygame.draw.line(win,GREY,(0,i*gap),(width,i*gap))
+        for j in range(rows):
+            pygame.draw.line(win,GREY,(j*gap,0),(j*gap,width))
+
+def draw(win,grid,rows,width):
+    win.fill(WHITE)
+    for row in grid:
+        for node in row:
+            node.draw(win)
+    draw_grid(win,rows,width)
+    pygame.display.update()
+
+def get_clicked_pos(pos,rows,width):
+    gap  = width // rows
+    y,x = pos
+    
+    row = y // gap
+    col = x // gap
+    
+    return row, col
+
+def reconstruct_path(came_from,current,draw,start):
+    while current in came_from:
+        current = came_from[current]
+        current.make_path()
+        draw()
+        if current == start:
+            current.make_start()            
+
+
+def algorithm(draw, grid,start,end):
+    count = 0
+    open_set = PriorityQueue() # 항상 가장 작은 요소를 가져오는 효율적인 방법
+    # open_set, f score, count, node
+    open_set.put((0, count, start)) # insted of push, firstly add the start node with its original f score.
+    came_from = {} # 어디서부터 왔는지 계속 track
+    g_score = {node: float("inf") for row in grid for node in row}
+    g_score[start] = 0
+    f_score = {node: float("inf") for row in grid for node in row}
+    f_score[start] = h(start.get_pos(),end.get_pos())
+
+    open_set_hash = {start}  
+    while not open_set.empty():
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+        current  = open_set.get()[2] # I want to know the node
+        open_set_hash.remove(current)
+        if current == end:
+            reconstruct_path(came_from,end,draw,start) # make path
+            end.make_end()
+            return True
+        for neighbor in current.neighbors:
+            temp_g_score = g_score[current] + 1
+            if temp_g_score < g_score[neighbor]:
+                came_from[neighbor] = current
+                g_score[neighbor] = temp_g_score
+                f_score[neighbor] = temp_g_score + h(neighbor.get_pos(),end.get_pos())
+                if neighbor not in open_set_hash:
+                    count += 1
+                    open_set.put((f_score[neighbor],count,neighbor))
+                    open_set_hash.add(neighbor)
+                    neighbor.make_open()
+        draw()
+
+        if current !=start:
+            current.make_closed()
+
+    return False
+
+
+def main(win,width):
+    ROWS = 50
+    
+    grid  = make_grid(ROWS,width) # Make 2D array
+
+    start = None
+    end = None
+
+    run = True
+    started =  False
+    while run:
+        draw(win,grid,ROWS,width)
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                run = False
+            if started:
+                continue
+            # If the user pressed on the mouse, we need to potentially
+            # draw a barrier we need
+            if pygame.mouse.get_pressed()[0]: # 왼쪽 마우스버튼
+                pos = pygame.mouse.get_pos()
+                row,col = get_clicked_pos(pos,ROWS,width) # 마우스에서의 위치 정보
+
+                node = grid[row][col]
+                if not start and node != end:
+                    start = node
+                    start.make_start()
+                elif not end and node != start:
+                    end = node
+                    end.make_end()
+                elif node != end and node != start:
+                    node.make_barrier()
+            elif pygame.mouse.get_pressed()[2]: # 오른쪽 마우스버튼
+                pos = pygame.mouse.get_pos()
+                row,col = get_clicked_pos(pos,ROWS,width) # 마우스에서의 위치 정보
+                node = grid[row][col]
+                node.reset()
+                if node == start:
+                    start = None
+                elif node == end:
+                    end = None
+            elif event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_SPACE and not started:
+                    for row in grid:
+                        for node in row:
+                            node.update_neighbors(grid)
+                    # lambda : anonymous function
+                    algorithm(lambda: draw(win,grid, ROWS,width),grid,start,end)
+                     
+    pygame.quit()
+
+
+main(WIN,WIDTH)
