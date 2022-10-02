@@ -138,8 +138,11 @@ def reconstruct_path(came_from,current,draw,start):
         if current == start:
             current.make_start()            
 
+def dijkstra(draw,grid,start,end):
+    
 
-def algorithm(draw, grid,start,end):
+    return False
+def a_star(draw, grid,start,end):
     count = 0
     open_set = PriorityQueue() # 항상 가장 작은 요소를 가져오는 효율적인 방법
     # open_set, f score, count, node
@@ -227,7 +230,7 @@ def main(win,width):
                         for node in row:
                             node.update_neighbors(grid)
                     # lambda : anonymous function
-                    algorithm(lambda: draw(win,grid, ROWS,width),grid,start,end)
+                    a_star(lambda: draw(win,grid, ROWS,width),grid,start,end)
                      
     pygame.quit()
 
